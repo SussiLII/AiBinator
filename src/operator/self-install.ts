@@ -6,6 +6,7 @@ import { appHome, installRecord, installRecordPath, keptData, launcherDirectory,
 import { installService, localHost, restartService, type ServiceHost } from './install.js';
 import { managedServiceStatus } from './service-status.js';
 import { stopService, unregisterService } from './service-control.js';
+import { clearFailure, failedInputs, recordFailure, withUpdateLock } from './update-guard.js';
 import { registerUpdateHook, removeUpdateHook, type Elevated } from './update-hooks.js';
 import { allowPorts, removePorts } from '../aibi/ports.js';
 import { installPlugin, pluginState, removePlugin } from './claude-plugin.js';
@@ -193,20 +194,41 @@ async function pullAndBuild(shell: Shell, root: string, state: UpdateState, rebu
     await shell.npm(root, ['run', 'build']);
 }
 
-export async function applyUpdate(shell: Shell, host: ServiceHost = localHost()): Promise<string> {
-    const root = appHome(host.platform);
-    const record = await installRecord(root);
-    if (!record) throw new Error(`AiBinator is not installed in ${root}. Run aibinator install first.`);
+async function updateInputs(shell: Shell, root: string, state: UpdateState): Promise<string> {
+    const upstream = (await shell.git(root, ['rev-parse', '@{upstream}'])).trim();
+    return [upstream, process.version, state.dirty, state.ahead > 0].join(' ');
+}
+
+async function runUpdate(shell: Shell, host: ServiceHost, root: string, record: InstallRecord, automatic: boolean): Promise<string> {
     const state = await checkForUpdate(shell, root);
-    const rebuild = record.nodeVersion !== process.version;
+    const failed = await failedInputs(host.home);
+    const rebuild = record.nodeVersion !== process.version || failed !== undefined;
     if (!state.behind && !rebuild) return `AiBinator is up to date (${state.current}).`;
-    await pullAndBuild(shell, root, state, rebuild);
+    const inputs = await updateInputs(shell, root, state);
+    if (automatic && failed === inputs) return 'AiBinator: last update failed for these inputs, skipping; run aibinator update to retry.';
+    try {
+        await pullAndBuild(shell, root, state, rebuild);
+    } catch (error) {
+        await recordFailure(host.home, inputs);
+        throw error;
+    }
+    await clearFailure(host.home);
     await writeFile(installRecordPath(root), `${JSON.stringify({ ...record, nodeVersion: process.version }, null, 2)}\n`, { mode: 0o600 });
     const service = await managedServiceStatus(host.platform, host.run, host.home);
     const restarted = service.active ? ` ${await restartService(host)}` : '';
     return state.behind
         ? `Updated AiBinator from ${state.current} to ${state.latest}.${restarted}`
-        : `Rebuilt AiBinator for Node.js ${process.version}.${restarted}`;
+        : `Rebuilt AiBinator ${state.current} with Node.js ${process.version}.${restarted}`;
+}
+
+export async function applyUpdate(shell: Shell, host: ServiceHost = localHost(), automatic = false): Promise<string> {
+    const root = appHome(host.platform);
+    const record = await installRecord(root);
+    if (!record) throw new Error(`AiBinator is not installed in ${root}. Run aibinator install first.`);
+    const result = await withUpdateLock(host.home, () => runUpdate(shell, host, root, record, automatic));
+    if (result !== undefined) return result;
+    if (automatic) return 'AiBinator: another update is already running, skipping.';
+    throw new Error('Another AiBinator update is already running. Try again when it finishes.');
 }
 
 async function removeFiles(root: string, purge: boolean): Promise<void> {

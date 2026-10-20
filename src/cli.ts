@@ -47,7 +47,7 @@ async function main(args: string[]): Promise<void> {
     const [command, ...rest] = args;
     const print = (lines: string[] | string) => console.log([lines].flat().join('\n'));
     if (command === 'install') return print(await installApp(localShell(true)));
-    if (command === 'update') return print(await applyUpdate(localShell(true)));
+    if (command === 'update') return print(await applyUpdate(localShell(true), undefined, rest.includes('--hook')));
     if (command === 'ports') return print(await allowPorts(localShell(true)));
     if (command === 'firmware') return firmware(rest);
     if (command === 'uninstall') return print(await uninstallApp(localShell(true), rest.includes('--purge')));

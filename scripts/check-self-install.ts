@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { access, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { appHome, installRecord, launcherScript } from '../src/operator/app-home.js';
+import { appHome, installRecord, installRecordPath, launcherScript } from '../src/operator/app-home.js';
 import {
     applyUpdate,
     checkForUpdate,
@@ -13,7 +13,7 @@ import {
     type Shell,
 } from '../src/operator/self-install.js';
 import { withUpdateLock } from '../src/operator/update-guard.js';
-import { hookFile, updaterScript } from '../src/operator/update-hooks.js';
+import { hookFile, removablePaths, updaterScript } from '../src/operator/update-hooks.js';
 import type { ServiceHost } from '../src/operator/install.js';
 import { policySchema } from '../src/core/config.js';
 import { lowPortsAllowed, portsFile } from '../src/aibi/ports.js';
@@ -27,7 +27,7 @@ const present = (path: string) =>
         () => false,
     );
 
-const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const pattern = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 function checkPaths(): void {
     assert.equal(appHome('linux', {}, '/home/a'), '/home/a/.local/share/aibinator');
@@ -50,7 +50,21 @@ function checkPaths(): void {
     assert.equal(httpsRemote('ssh://git@github.com/a/b.git'), 'https://github.com/a/b.git');
     assert.match(hookFile('pacman', true), /Exec = \/usr\/lib\/aibinator\/aibinator-update\nDepends = git\nNetworkAccess = allowed/);
     assert.doesNotMatch(hookFile('pacman'), /NetworkAccess/);
+    assert.deepEqual(
+        hookFile('pacman')
+            .split('\n')
+            .filter((line) => line.startsWith('Target = ')),
+        ['Target = nodejs', 'Target = nodejs-lts-*'],
+        'only the packages the build depends on trigger the update',
+    );
     assert.match(hookFile('apt-get'), /DPkg::Post-Invoke/);
+    assert.match(hookFile('pacman'), /Depends = git/);
+    assert.match(
+        updaterScript(),
+        new RegExp(`\\[ -d "\\$home" \\][\\s\\S]*rm -rf ${pattern(removablePaths.join(' '))}\\n[\\s\\S]*else[\\s\\S]*skipping the update`),
+        'a gone app removes its own hook only while the home exists',
+    );
+    assert.ok(removablePaths.includes('/usr/lib/aibinator') && removablePaths.includes('/etc/apt/apt.conf.d/99aibinator-update'));
     assert.match(
         updaterScript(),
         /runuser -u "\$owner"[\s\S]*dist\/src\/cli\.js update --hook[\s\S]*exit 0\n$/,
@@ -129,6 +143,36 @@ async function checkFailedUpdate(root: string, shell: Shell, host: ServiceHost):
     assert.equal(builds.length, 4);
 }
 
+async function checkNodeChange(target: string, shell: Shell, host: ServiceHost, npm: string[][]): Promise<void> {
+    const stale = async () => {
+        const record = await installRecord(target);
+        await writeFile(installRecordPath(target), JSON.stringify({ ...record, nodeVersion: 'v0.0.0' }));
+    };
+    const builds = npm.filter((args) => args[0] === 'run').length;
+    await stale();
+    const offline: Shell = {
+        ...shell,
+        git: (cwd, args) => (args[0] === 'fetch' ? Promise.reject(new Error('offline')) : shell.git(cwd, args)),
+    };
+    assert.match(await applyUpdate(offline, host), /could not fetch updates \(offline\).*Rebuilt AiBinator/);
+    assert.equal(npm.filter((args) => args[0] === 'run').length, builds + 1, 'a Node change rebuilds while offline');
+    await stale();
+    assert.match(await applyUpdate(shell, host), /Rebuilt AiBinator/);
+    assert.equal(npm.filter((args) => args[0] === 'run').length, builds + 2, 'a Node change rebuilds a dirty checkout');
+}
+
+async function checkSystemFiles(sudo: string[][]): Promise<void> {
+    assert.ok(
+        sudo.some((args) => args.join(' ') === 'tee /usr/share/libalpm/hooks/aibinator-update.hook'),
+        'system updates are hooked',
+    );
+    assert.equal(
+        sudo.some((args) => args.join(' ') === `tee ${portsFile}`),
+        !(await lowPortsAllowed(53)),
+        'AIBI’s low ports are allowed when the computer does not allow them yet',
+    );
+}
+
 async function checkInstallUpdateUninstall(root: string): Promise<void> {
     const { source, origin } = await prepareSource(root);
     const target = join(root, 'app');
@@ -157,17 +201,9 @@ async function checkInstallUpdateUninstall(root: string): Promise<void> {
             assert.ok(await present(join(target, '.data', 'aibi', 'memory.json')), 'AIBI’s memory moves with the install');
             assert.deepEqual(npm, [['ci', '--no-audit', '--no-fund']]);
             const unit = await readFile(join(home, '.config/systemd/user/aibinator.service'), 'utf8');
-            assert.match(unit, new RegExp(`^WorkingDirectory=${literal(target)}$`, 'm'), 'the service runs from the installed copy');
-            assert.match(await readFile(join(home, '.local/bin/aibinator'), 'utf8'), new RegExp(`cd '${literal(target)}'`));
-            assert.ok(
-                sudo.some((args) => args.join(' ') === 'tee /usr/share/libalpm/hooks/aibinator-update.hook'),
-                'system updates are hooked',
-            );
-            assert.equal(
-                sudo.some((args) => args.join(' ') === `tee ${portsFile}`),
-                !(await lowPortsAllowed(53)),
-                'AIBI’s low ports are allowed when the computer does not allow them yet',
-            );
+            assert.match(unit, new RegExp(`^WorkingDirectory=${pattern(target)}$`, 'm'), 'the service runs from the installed copy');
+            assert.match(await readFile(join(home, '.local/bin/aibinator'), 'utf8'), new RegExp(`cd '${pattern(target)}'`));
+            await checkSystemFiles(sudo);
             assert.equal((await installRecord(target))?.branch, 'main');
             const latest = await pushUpstream(root, origin);
             const state = await checkForUpdate(shell, target);
@@ -182,6 +218,7 @@ async function checkInstallUpdateUninstall(root: string): Promise<void> {
             assert.equal((await checkForUpdate(shell, target)).behind, 0, 'deleting the repo does not break the install or its updates');
             await writeFile(join(target, 'README.md'), 'edited\n');
             assert.match(updateBlocker(await checkForUpdate(shell, target)) ?? '', /local changes/);
+            await checkNodeChange(target, shell, host, npm);
             const removed = await uninstallApp(shell, false, host);
             assert.match(removed.join(' '), /settings stay in/);
             assert.deepEqual((await readdir(target)).sort(), ['.data', '.env', 'policy.json'], 'only your settings are kept');

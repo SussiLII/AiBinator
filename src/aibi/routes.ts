@@ -1,4 +1,6 @@
 import type net from 'node:net';
+import { readFile, readdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { actions } from './capabilities.js';
 import type { ActivityLog } from './activity.js';
 import type { TrafficCapture } from './capture.js';
@@ -29,7 +31,6 @@ export interface RouteHost {
 }
 
 const ok = (reply: Reply | Buffer, headers?: Record<string, string>) => encode('HTTP/1.1 200 OK', reply, headers);
-const known = /^\/(time|token\/|aibi\/ota\/(res|allres)\/|aibi\/ai\/rockpaper)/;
 const nativeIds = new Set(actions.map((action) => action.id));
 
 function bodySummary(body: Buffer, contentType = ''): string {
@@ -65,9 +66,32 @@ function imageType(body: Buffer): string {
     return 'image/jpeg';
 }
 
-export class AibiRoutes implements Routes {
-    private readonly reported = new Map<string, number>();
+/** Newest captured vendor reply for GET /token/…, or undefined. */
+async function newestTokenReply(): Promise<Buffer | undefined> {
+    const directory = '.data/aibi/traffic';
+    let names: string[];
+    try {
+        names = (await readdir(directory)).filter((file) => file.endsWith('.json')).sort();
+    } catch {
+        return undefined;
+    }
+    for (let index = names.length - 1; index >= 0; index--) {
+        try {
+            const record = JSON.parse(await readFile(join(directory, names[index]!), 'utf8')) as {
+                request?: { startLine?: string };
+                response?: { startLine?: string; body?: string };
+            };
+            if (!record.request?.startLine?.startsWith('GET /token/')) continue;
+            if (!record.response?.body || !record.response.startLine?.includes('200')) continue;
+            return Buffer.from(record.response.body, 'utf8');
+        } catch {
+            continue;
+        }
+    }
+    return undefined;
+}
 
+export class AibiRoutes implements Routes {
     constructor(private readonly host: RouteHost) {}
 
     streams(method: string, path: string): boolean {
@@ -92,6 +116,9 @@ export class AibiRoutes implements Routes {
                 timeZone: request.query.get('timezone'),
                 chat: request.query.get('role') === 'chatgpt',
             }),
+            // The vendor answers this route with text/html; mirror it exactly —
+            // the firmware ignored our application/json replies (2026-11-08).
+            { 'Content-Type': 'text/html; charset=utf-8' },
         );
         this.host.capture.record({
             scheme: request.scheme,
@@ -121,7 +148,20 @@ export class AibiRoutes implements Routes {
         if (this.host.mode() === 'passthrough' || exchange.path === '/aibi/ota/version') return this.observe(exchange);
         const speech = exchange.method === 'GET' ? /^\/(?:tts|poweron)\/dl\/([\w.-]+)$/.exec(exchange.path) : null;
         if (speech) return this.speech(speech[1]!, socket);
-        return (await this.local(exchange)) ?? this.forward(exchange, !known.test(exchange.path));
+        if (exchange.method === 'GET' && exchange.path.startsWith('/token/')) return this.token(exchange);
+        return (await this.local(exchange)) ?? this.refuse(exchange);
+    }
+
+    private refuse(exchange: Exchange): Buffer {
+        const query = exchange.query.toString();
+        this.host.activity.add(
+            'unknown',
+            `Refused ${exchange.method} ${exchange.path} (local mode, no vendor cloud)`,
+            [query && `query ${query}`, bodySummary(exchange.message.body, exchange.message.headers['content-type'])]
+                .filter(Boolean)
+                .join(' · '),
+        );
+        return encode('HTTP/1.1 503 Service Unavailable', { errcode: 503, errmsg: 'Not available in local mode' }, { Connection: 'close' });
     }
 
     private speech(id: string, socket: net.Socket): Buffer | 'served' {
@@ -166,6 +206,7 @@ export class AibiRoutes implements Routes {
             'POST /aibi/messages/send': () => this.friendMessage(message),
             'GET /aibi/messages/receive': () => ok(tagged('getmessage', { m_list: [] })),
             'GET /aibi/messages/confirm': () => ok(tagged('get message')),
+            'GET /time': () => ok(tagged('timestamp', { time: Math.floor(Date.now() / 1000) })),
             'GET /aibi/poweron/voice': async () => ok(await desk.powerOn(zone)),
             'GET /aibi/speech/tts': async () => ok(await desk.readAloud(query.get('q') ?? '')),
             'GET /aibi/chat/start': async () => ok(await desk.chatStart(zone)),
@@ -186,27 +227,18 @@ export class AibiRoutes implements Routes {
         return ok(tagged('sendmessage'));
     }
 
-    private async forward(exchange: Exchange, unknown: boolean): Promise<Buffer> {
-        if (unknown) this.newRequest(exchange);
-        try {
-            return rebuild(await exchange.forward());
-        } catch (error) {
-            this.host.activity.add(
-                'warning',
-                `Could not reach the AIBI cloud for ${exchange.path}`,
-                error instanceof Error ? error.message : '',
-            );
-            return encode('HTTP/1.1 502 Bad Gateway', { errcode: 502, errmsg: 'AIBI cloud unreachable' }, { Connection: 'close' });
+    /**
+     * Serves the newest cached vendor token reply (local mode never contacts the vendor).
+     * The token is a short-lived badge; the experiment is whether the firmware tolerates it.
+     */
+    private async token(exchange: Exchange): Promise<Buffer> {
+        const cached = await newestTokenReply();
+        if (!cached) {
+            this.host.activity.add('warning', 'No cached /token reply to serve', exchange.path);
+            return encode('HTTP/1.1 503 Service Unavailable', { errcode: 503, errmsg: 'Not available in local mode' }, { Connection: 'close' });
         }
-    }
-
-    private newRequest(exchange: Exchange): void {
-        const key = `${exchange.method} ${exchange.path}`;
-        if (Date.now() - (this.reported.get(key) ?? 0) < 3_600_000) return;
-        this.reported.set(key, Date.now());
-        const query = exchange.query.toString();
-        const body = bodySummary(exchange.message.body, exchange.message.headers['content-type']);
-        this.host.activity.add('unknown', `New request: ${key}`, [query && `query ${query}`, body].filter(Boolean).join(' · '));
+        this.host.activity.add('network', 'Served cached token (local mode)', exchange.path);
+        return ok(cached, { 'Content-Type': 'application/json', Connection: 'close' });
     }
 
     private async observe(exchange: Exchange): Promise<Buffer> {

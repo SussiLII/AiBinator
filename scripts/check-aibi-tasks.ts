@@ -94,7 +94,7 @@ async function checkPause(directory: string): Promise<void> {
     gemini.reply = (session) => session.speak('Hello!');
     await desk.listen(stream(pcm(true)), chat);
     const reply = await desk.listen(stream(pcm(false)), chat);
-    assert.equal(result(reply).behavior_paras.txt, '', 'a quiet moment keeps AIBI listening');
+    assert.equal(result(reply).behavior_paras.txt, 'OK', 'a quiet moment keeps AIBI listening (vendor-style non-empty txt)');
     assert.equal(gemini.last.named('start').length, 1, 'quiet uploads never reach Gemini');
     assert.equal(desk.active, true);
 }

@@ -11,8 +11,16 @@ const fillEveryMs = 100;
 
 const bytesPerMs = 8;
 
+/** Vendor media id: YYYYMMDD + 32 hex chars, no extension (e.g. 20261107de18…3165b). */
+const vendorMediaId = (): string => {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${now.getFullYear()}${month}${day}${randomUUID().replaceAll('-', '')}`;
+};
+
 export class SpeechStream {
-    readonly id = `local-${randomUUID()}.mp3`;
+    readonly id = vendorMediaId();
     private readonly chunks: Buffer[] = [];
     private readonly encoder = new Mp3Stream();
     private state: 'open' | 'ended' | 'failed' = 'open';

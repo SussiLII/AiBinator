@@ -8,7 +8,7 @@ import type { Outcome } from '../voice/turn.js';
 import type { ActivityLog } from './activity.js';
 import { checkAction } from './capabilities.js';
 import type { Memory } from './memory.js';
-import { act, chatMode, chatStart, failed, photoAnswer, recognize, speak, tagged, type Reply } from './protocol.js';
+import { act, chatMode, chatStart, dontUnderstand, failed, photoAnswer, recognize, speak, tagged, type Reply } from './protocol.js';
 import type { Speeches } from './speech.js';
 import { words } from '../core/text.js';
 
@@ -176,7 +176,8 @@ export class VoiceDesk {
             case 'farewell':
                 return this.switching(turn, outcome);
             case 'unheard':
-                return act(turn, 'voice_dont_understand', {});
+                // Vendor shape: interact_answer_with_animation + out_of_scope + animation_name.
+                return dontUnderstand({ ...turn, queryText: turn.queryText || 'I cannot understand' });
             case 'quit':
                 return info.chat ? chatMode(turn, 'quit') : this.quiet(turn);
             default:

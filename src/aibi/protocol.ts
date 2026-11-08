@@ -30,7 +30,8 @@ export interface Speech extends Turn {
 
 export function speak(speech: Speech): Reply {
     return envelope(speech, 'interact_speak', 'local_ai_speak', {
-        txt: speech.text,
+        // The vendor never ships an empty txt; an empty transcript reads as a broken reply.
+        txt: speech.text || 'OK',
         url: speech.url,
         pre_animation: '',
         post_animation: '',
@@ -51,6 +52,11 @@ export function photoAnswer(speech: Speech): Reply {
 
 export function act(turn: Turn, behavior: string, params: Params): Reply {
     return envelope(turn, behavior, behavior, Object.keys(params).length ? params : []);
+}
+
+/** The vendor's didn't-catch-that reply: an animation envelope, not a speech one (captured 2026-11-07). */
+export function dontUnderstand(turn: Turn): Reply {
+    return envelope(turn, 'interact_answer_with_animation', 'out_of_scope', { animation_name: 'voice_dont_understand' });
 }
 
 export function chatMode(turn: Turn, type: 'connect' | 'quit', answer?: { text: string; url: string }): Reply {

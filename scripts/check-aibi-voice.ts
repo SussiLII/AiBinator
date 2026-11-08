@@ -18,7 +18,7 @@ async function checkSpeech(directory: string): Promise<void> {
     const turn = result(reply);
     assert.equal(turn.rec_behavior, 'interact_speak');
     assert.equal(turn.behavior_paras.listen, 0, 'like the cloud, AIBI decides when it listens');
-    assert.match(String(turn.behavior_paras.url), /^http:\/\/api\.aibipocket\.com\/tts\/dl\/local-.+\.mp3$/);
+    assert.match(String(turn.behavior_paras.url), /^http:\/\/api\.aibipocket\.com\/tts\/dl\/\d{8}[0-9a-f]{32}$/, 'media ids use the vendor date+hex format');
     assert.equal(turn.behavior_paras.txt, 'Hi! Nice to hear you.');
     assert.equal(reply.index, 7);
     const session = gemini.last;
@@ -48,7 +48,10 @@ async function checkSpeech(directory: string): Promise<void> {
 async function checkSilentWake(directory: string): Promise<void> {
     const { desk, gemini } = deskFixture(await mkdtemp(join(directory, 'silent-')));
     const reply = await desk.listen(stream(pcm(false)), info);
-    assert.equal(result(reply).rec_behavior, 'voice_dont_understand', 'a silent wake gets the native puzzled reaction');
+    const puzzled = result(reply);
+    assert.equal(puzzled.rec_behavior, 'interact_answer_with_animation', 'a silent wake gets the vendor puzzled-animation reply');
+    assert.equal((puzzled.intent as { name: string }).name, 'out_of_scope');
+    assert.deepEqual(puzzled.behavior_paras, { animation_name: 'voice_dont_understand' });
     assert.equal(gemini.last.named('start').length, 0, 'silence never reaches Gemini');
     assert.equal(desk.active, true, 'the voice stays ready for the next wake');
     const fresh = deskFixture(await mkdtemp(join(directory, 'silent-chat-')));
@@ -75,7 +78,7 @@ async function checkConversationMode(directory: string): Promise<void> {
     const next = await desk.listen(stream(pcm(true)), chat);
     assert.equal(result(next).rec_behavior, 'interact_speak', 'in conversation mode answers are plain speech');
     const quiet = await desk.listen(stream(pcm(false)), chat);
-    assert.equal(result(quiet).behavior_paras.txt, '', 'a quiet upload just keeps it listening');
+    assert.equal(result(quiet).behavior_paras.txt, 'OK', 'a quiet upload still carries a non-empty vendor-style txt');
     assert.ok(!gemini.last.options.tools.some((tool) => tool.name === 'start_conversation'));
 }
 
@@ -111,7 +114,7 @@ async function checkLeftover(directory: string): Promise<void> {
     };
     played(host, await desk.listen(stream(pcm(true)), chat));
     const quiet = await desk.listen(stream(pcm(false)), chat);
-    assert.equal(result(quiet).behavior_paras.txt, '', 'speech Gemini produced after its turn is never played later on a quiet upload');
+    assert.equal(result(quiet).behavior_paras.txt, 'OK', 'speech Gemini produced after its turn is never played later on a quiet upload');
 }
 
 async function checkFarewell(directory: string): Promise<void> {
@@ -129,7 +132,7 @@ async function checkFalseWake(directory: string): Promise<void> {
     gemini.reply = (session) => session.speak('Goodbye.');
     const reply = await desk.listen(stream(pcm(true)), info);
     assert.equal(result(reply).rec_behavior, 'interact_speak');
-    assert.equal(result(reply).behavior_paras.txt, '', 'a wake the voice dismisses stays silent');
+    assert.equal(result(reply).behavior_paras.txt, 'OK', 'a wake the voice dismisses stays audibly silent');
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(desk.active, false, 'and does not start conversation mode');
 }
@@ -138,7 +141,7 @@ async function checkWordless(directory: string): Promise<void> {
     const { desk, gemini } = deskFixture(await mkdtemp(join(directory, 'wordless-')));
     gemini.reply = (session) => session.speak('---');
     const reply = await desk.listen(stream(pcm(true)), chat);
-    assert.equal(result(reply).behavior_paras.txt, '', 'speech without words is treated as silence');
+    assert.equal(result(reply).behavior_paras.txt, 'OK', 'speech without words is treated as silence');
 }
 
 async function checkAction(directory: string): Promise<void> {

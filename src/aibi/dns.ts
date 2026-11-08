@@ -1,6 +1,5 @@
 import dgram from 'node:dgram';
 import net from 'node:net';
-import { aibiHost } from './network.js';
 
 const ttlSeconds = 30;
 
@@ -41,7 +40,20 @@ export function question(message: Buffer): Question | undefined {
     };
 }
 
-const ours = (name?: string) => Boolean(name && (name === aibiHost || name.endsWith(`.${aibiHost}`)));
+const vendorZone = 'aibipocket.com';
+
+const ours = (name?: string) => Boolean(name && (name === vendorZone || name.endsWith(`.${vendorZone}`)));
+
+/**
+ * macOS only lets an unprivileged process bind a port below 1024 on the
+ * wildcard address; binding the same port to a specific address fails with
+ * EACCES even when the address belongs to this computer. Return the wildcard
+ * so port 53 works without root, which still receives what was sent to the
+ * machine's own address. Other platforms keep the configured address.
+ */
+function bindAddress(port: number, address: string, platform = process.platform): string {
+    return platform === 'darwin' && port < 1024 ? '0.0.0.0' : address;
+}
 
 export function localAnswer(query: Buffer, address: string): Buffer | undefined {
     const asked = question(query);
@@ -74,8 +86,17 @@ function failure(query: Buffer): Buffer | undefined {
     return Buffer.concat([header, query.subarray(12)]);
 }
 
-function forward(message: Buffer, upstream: string): Promise<Buffer> {
+/**
+ * Send the query from this computer's own LAN address instead of an unbound
+ * socket. A VPN that answers DNS itself intercepts queries from an unbound
+ * socket - to the router that shows up as a timeout, and to a public resolver
+ * as a placeholder address such as 198.18.x.x that connects nowhere. Pinning
+ * the source to a real interface keeps the query on the physical network, where
+ * the router answers normally. A loopback upstream is left unbound.
+ */
+function forward(message: Buffer, upstream: string, source = ''): Promise<Buffer> {
     const [host = '1.1.1.1', port = '53'] = upstream.split(':');
+    const from = source && !host.startsWith('127.') ? source : '';
     return new Promise((resolve, reject) => {
         const socket = dgram.createSocket('udp4');
         const timer = setTimeout(() => {
@@ -92,7 +113,11 @@ function forward(message: Buffer, upstream: string): Promise<Buffer> {
             socket.close();
             reject(error);
         });
-        socket.send(message, Number(port), host);
+        const send = () => socket.send(message, Number(port), host);
+        if (from)
+            socket.bind(0, from, send);
+        else
+            send();
     });
 }
 
@@ -107,6 +132,7 @@ export class DnsServer {
     ) {}
 
     async start(): Promise<void> {
+        const address = bindAddress(this.options.port, this.options.address);
         const udp = dgram.createSocket({ type: 'udp4', reuseAddr: true });
         udp.on(
             'message',
@@ -116,7 +142,7 @@ export class DnsServer {
         udp.on('error', (error) => this.events.warning('DNS server error', error.message));
         await new Promise<void>((resolve, reject) => {
             udp.once('error', reject);
-            udp.bind(this.options.port, this.options.address, () => {
+            udp.bind(this.options.port, address, () => {
                 udp.off('error', reject);
                 resolve();
             });
@@ -125,7 +151,7 @@ export class DnsServer {
         const tcp = net.createServer((socket) => this.stream(socket));
         tcp.on('error', (error) => this.events.warning('DNS TCP server error', error.message));
         await new Promise<void>((resolve) =>
-            tcp.listen(this.options.port, this.options.address, () => resolve()).once('error', () => resolve()),
+            tcp.listen(this.options.port, address, () => resolve()).once('error', () => resolve()),
         );
         if (tcp.listening) this.tcp = tcp;
     }
@@ -142,7 +168,7 @@ export class DnsServer {
     private async reply(message: Buffer, remote: string): Promise<Buffer | undefined> {
         try {
             const local = localAnswer(message, this.options.address);
-            if (!local) return await forward(message, this.options.upstream);
+            if (!local) return await forward(message, this.options.upstream, this.options.address);
             this.noteAnswer(remote);
             return local;
         } catch (error) {

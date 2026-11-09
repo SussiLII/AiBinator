@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-10 — Recovery release activated
+
+Source4fbe55d is on the owner fork main and active on the selected host. All233 built files match the manifest. Existing private configuration and memory were preserved; the archived token matches the robot identity. Fresh robot HTTPS heartbeats and DNS were observed. Trusted-CA localhost token/update probes returned200; physical boot, audio and playback acceptance remain pending. The restored token is expired, so acceptance is still experimental. The Codex responder is still disabled.
+
 ## 2026-11-10 — Preserve startup credentials and useful AIBI evidence
 
 - Store exact vendor login replies privately under `.data/aibi/tokens`, keyed by the device's token route. Migrate a matching saved capture once, and preserve future successful passthrough login replies. Local mode remains vendor-blocked; it never refreshes a token automatically or rewrites its expiry.

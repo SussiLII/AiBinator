@@ -10,3 +10,13 @@ Build and qualify on the development host. Deploy only a verified commit on the 
 6. Verify process identity, exact source and runtime hashes, unchanged private configuration, DNS answers, fresh robot contact, and local handler behavior. Label agent probes as agent probes. A physical test must establish robot boot, audio upload and audible playback separately.
 
 Rollback: return only the selected service to the prior source and retained dist under the same operational claim; preserve current memory, captures, TLS keys and private login state. Check actual effects before retrying any task or playback. GUI service and route durability are existing limitations; this procedure does not migrate them.
+
+## Codex connection after basic voice acceptance
+
+1. Publish the qualified reviewer-inheritance change to the owner's main and deploy its locally built runtime through the same release procedure. Confirm the voice baseline is accepted before enabling task handling.
+2. Read the existing service plist fresh and preserve its label and all existing fields. Add the existing home/bin wrapper first on its PATH, followed by /opt/homebrew/bin and the system paths. Save the previous plist for rollback. Reload only this existing service; the standard installer uses a different label and must not create a second instance. Preserve the account's Codex configuration and authentication.
+3. Create an isolated task workspace under the account's home. Write the existing version1 operator configuration with mode=codex-local, enabled=true, exclusiveLocal=true, that absolute workspace, timeoutSeconds=0, activityVisibility=true, backgroundOnly=true and shareConversation=false. Set updatedAt to the current ISO timestamp. Leave model choice inherited from the account. Use the existing config writer and private permissions; do not copy test state into production.
+4. Verify one live task responder owns the connection and the selected executable is the home/bin wrapper. Inspect the new thread's actual approvalsReviewer and subsequent thread_settings_applied events: they must retain the configured automatic reviewer and on-request policy. A config file alone is not sufficient proof.
+5. Say the music request through AIBI. Require evidence of real uploaded speech, the Gemini do_task handoff, the corresponding Codex turn, and the requested recording actually playing. Lemon playback is the accepted fallback. Do not count a scripted injection or a title search as physical acceptance.
+
+If the responder cannot start, retain its diagnostic evidence and disable that operator configuration. Do not refresh vendor credentials, change shared Codex settings, or switch the voice path to passthrough as an implicit fallback.

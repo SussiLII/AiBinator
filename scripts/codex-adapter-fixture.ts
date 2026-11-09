@@ -101,7 +101,7 @@ export async function session(adapter: CodexAdapter, transport: MockTransport, i
     const opening = adapter.openSession({ role: 'controller', conversationKey: id });
     const frame = await transport.request('thread/start', after);
     assert.equal(frame.params?.approvalPolicy, 'on-request');
-    assert.equal(frame.params?.approvalsReviewer, 'user');
+    assert.equal(Object.hasOwn(frame.params ?? {}, 'approvalsReviewer'), false);
     assert.equal(frame.params?.model, config.codexModel);
     assert.equal(frame.params?.developerInstructions, roleInstructions('controller', config.instructions));
     assert.equal(frame.params?.sandbox, undefined);

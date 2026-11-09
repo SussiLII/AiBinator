@@ -71,6 +71,22 @@ export function olderVersionRequest(startLine: string): string | undefined {
     return `${method} ${url.pathname}?${url.searchParams.toString()} ${protocol}`;
 }
 
+/**
+ * Local-mode answer to the update check: "you are on the latest version", echoing the
+ * robot's own reported version. The robot's 2026-11-09 00:12Z boot met a vendor offer
+ * ("1.7.0", no download URL) under lockdown and its updater stalled — no token, no
+ * power-on greeting, no voice uploads for 16 h after. Answering hermetically lets the
+ * boot sequence finish: update check → permissions → token → greeting → audio armed.
+ */
+export function latestVersionOffer(query: URLSearchParams): Json {
+    return {
+        'version-num': text(query.get('version_num'), '8'),
+        'version-name': text(query.get('current_name'), '1.5.0'),
+        type: 'public',
+        responsetag: 'latestversion',
+    };
+}
+
 const firmwareLike = (value: string) =>
     /^https?:\/\//i.test(value) && /(?:ota|firmware|fw|update|\.bin|\.zip|\.img|\.ota)(?:[/?#]|$)/i.test(value);
 

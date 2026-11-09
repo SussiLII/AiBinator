@@ -8,6 +8,7 @@ import type { VoiceDesk } from './desk.js';
 import {
     downloadFirmware,
     firmwareUrls,
+    latestVersionOffer,
     olderVersionRequest,
     patchedFirmware,
     patchedOffer,
@@ -145,7 +146,11 @@ export class AibiRoutes implements Routes {
     private async respond(exchange: Exchange, socket: net.Socket): Promise<Buffer | 'served'> {
         const trapped = await this.firmware(exchange);
         if (trapped) return trapped;
-        if (this.host.mode() === 'passthrough' || exchange.path === '/aibi/ota/version') return this.observe(exchange);
+        // Local mode answers the update check hermetically: the robot's own version is
+        // "latest" (a vendor "newer version" offer with no URL stalled its 2026-11-09 boot).
+        if (this.host.mode() === 'local' && exchange.path === '/aibi/ota/version')
+            return ok(latestVersionOffer(exchange.query), { Connection: 'close' });
+        if (this.host.mode() === 'passthrough') return this.observe(exchange);
         const speech = exchange.method === 'GET' ? /^\/(?:tts|poweron)\/dl\/([\w.-]+)$/.exec(exchange.path) : null;
         if (speech) return this.speech(speech[1]!, socket);
         if (exchange.method === 'GET' && exchange.path.startsWith('/token/')) return this.token(exchange);

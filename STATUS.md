@@ -9,3 +9,5 @@
 - Verify intelligible captured speech, correct answer and actual robot playback.
 - Enable the existing Codex responder, then verify the requested recording through one real voice task and audible playback.
 - Repeat after robot restart and the former heartbeat-eviction window before claiming stability. Host-reboot durability remains separate.
+
+- (2026-11-10, Codex) Codex reviewer-inheritance correction qualified on branch; not activated. See CHANGELOG “Prepare Codex reviewer inheritance”. Stage a private app-server with separate conversation, the existing wrapper first on PATH, and the configured automatic reviewer; verify actual session settings before a task.

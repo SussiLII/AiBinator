@@ -145,7 +145,7 @@ export function sessionParams(config: OperatorConfig, sessionId?: string, role: 
     return {
         cwd: config.workspace,
         approvalPolicy: 'on-request',
-        approvalsReviewer: 'user',
+        // Preserve the user's configured reviewer, including automatic review.
         ...(codexChoice(config, role === 'worker').model ? { model: codexChoice(config, role === 'worker').model } : {}),
         ...(shared ? {} : { developerInstructions: roleInstructions(role, config.instructions) }),
         ...(sessionId ? { threadId: sessionId } : {}),

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-10 — Prepare Codex reviewer inheritance
+
+The task adapter forced human review even when the account had automatic review configured. It now omits that override and inherits the configured reviewer while retaining on-request approvals. Adapter checks and TypeScript build pass without provider connections. This change is prepared on a branch, not activated; the task responder remains disabled until basic voice acceptance. The host service also needs its executable search path to include the existing Codex wrapper before activation. Official protocol reference: https://learn.chatgpt.com/docs/app-server .
+
 ## 2026-11-10 — Recovery release activated
 
 Source4fbe55d is on the owner fork main and active on the selected host. All233 built files match the manifest. Existing private configuration and memory were preserved; the archived token matches the robot identity. Fresh robot HTTPS heartbeats and DNS were observed. Trusted-CA localhost token/update probes returned200; physical boot, audio and playback acceptance remain pending. The restored token is expired, so acceptance is still experimental. The Codex responder is still disabled.

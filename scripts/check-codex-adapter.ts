@@ -23,6 +23,7 @@ async function checkDynamicTools(): Promise<void> {
     try {
         await session(h.adapter, h.transport, 'tool-controller');
         const start = h.transport.sent.find((frame) => frame.method === 'thread/start')!;
+        assert.equal(Object.hasOwn(start.params ?? {}, 'approvalsReviewer'), false, 'the configured reviewer is inherited');
         assert.deepEqual(
             start.params?.dynamicTools,
             tools.map(({ name, description, inputSchema }) => ({

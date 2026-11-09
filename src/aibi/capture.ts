@@ -34,6 +34,13 @@ export class TrafficCapture {
 
     record(entry: Captured): void {
         if (!this.enabled()) return;
+        // Heartbeats remain in status counters; keep failures and meaningful traffic on disk.
+        if (
+            /^GET \/time(?:[? ]|$)/.test(entry.request.startLine) &&
+            entry.response !== 'served' &&
+            /^HTTP\/\S+ 200 /.test(entry.response.toString('latin1', 0, 40))
+        )
+            return;
         const name = `${new Date().toISOString().replace(/[:.]/g, '-')}-${String(++this.sequence).padStart(6, '0')}`;
         this.writing = this.writing.then(() => this.write(name, entry)).catch(() => undefined);
     }

@@ -1,6 +1,4 @@
 import type net from 'node:net';
-import { readFile, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
 import { actions } from './capabilities.js';
 import type { ActivityLog } from './activity.js';
 import type { TrafficCapture } from './capture.js';
@@ -20,6 +18,7 @@ import { decodedBody, rebuild, type Message } from './http.js';
 import { encode, summarize, tagged, type Reply } from './protocol.js';
 import type { Exchange, Incoming, Routes } from './proxy.js';
 import type { Speeches } from './speech.js';
+import { cachedTokenReply, rememberTokenReply } from './tokens.js';
 
 export interface RouteHost {
     mode(): 'local' | 'passthrough';
@@ -65,31 +64,6 @@ function parseJson(message: Message): Reply | undefined {
 function imageType(body: Buffer): string {
     if (body.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
     return 'image/jpeg';
-}
-
-/** Newest captured vendor reply for GET /token/…, or undefined. */
-async function newestTokenReply(): Promise<Buffer | undefined> {
-    const directory = '.data/aibi/traffic';
-    let names: string[];
-    try {
-        names = (await readdir(directory)).filter((file) => file.endsWith('.json')).sort();
-    } catch {
-        return undefined;
-    }
-    for (let index = names.length - 1; index >= 0; index--) {
-        try {
-            const record = JSON.parse(await readFile(join(directory, names[index]!), 'utf8')) as {
-                request?: { startLine?: string };
-                response?: { startLine?: string; body?: string };
-            };
-            if (!record.request?.startLine?.startsWith('GET /token/')) continue;
-            if (!record.response?.body || !record.response.startLine?.includes('200')) continue;
-            return Buffer.from(record.response.body, 'utf8');
-        } catch {
-            continue;
-        }
-    }
-    return undefined;
 }
 
 export class AibiRoutes implements Routes {
@@ -237,12 +211,16 @@ export class AibiRoutes implements Routes {
      * The token is a short-lived badge; the experiment is whether the firmware tolerates it.
      */
     private async token(exchange: Exchange): Promise<Buffer> {
-        const cached = await newestTokenReply();
+        const cached = await cachedTokenReply(exchange.path, this.host.capture.directory);
         if (!cached) {
-            this.host.activity.add('warning', 'No cached /token reply to serve', exchange.path);
-            return encode('HTTP/1.1 503 Service Unavailable', { errcode: 503, errmsg: 'Not available in local mode' }, { Connection: 'close' });
+            this.host.activity.add('warning', 'No saved /token reply to serve', exchange.path);
+            return encode(
+                'HTTP/1.1 503 Service Unavailable',
+                { errcode: 503, errmsg: 'Not available in local mode' },
+                { Connection: 'close' },
+            );
         }
-        this.host.activity.add('network', 'Served cached token (local mode)', exchange.path);
+        this.host.activity.add('network', 'Served saved token (local mode)', exchange.path);
         return ok(cached, { 'Content-Type': 'application/json', Connection: 'close' });
     }
 
@@ -260,6 +238,8 @@ export class AibiRoutes implements Routes {
             return encode('HTTP/1.1 502 Bad Gateway', { errcode: 502, errmsg: 'AIBI cloud unreachable' }, { Connection: 'close' });
         }
         if (older) this.host.activity.add('firmware', 'Asked the cloud for updates as an older version', older);
+        if (exchange.method === 'GET' && exchange.path.startsWith('/token/') && /^HTTP\/\S+ 200(?: |$)/.test(response.startLine))
+            await rememberTokenReply(exchange.path, decodedBody(response).toString('utf8'));
         if (exchange.path === '/aibi/ota/version') return this.capture(exchange, response);
         this.learn(exchange, response);
         return rebuild(response);

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readdir, readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import { join } from 'node:path';
 import tls from 'node:tls';
@@ -93,18 +93,23 @@ async function checkForwarding(
     fixture: ReturnType<typeof deskFixture>,
     seen: string[],
 ): Promise<void> {
-    assert.deepEqual(json(await exchange(secure(ports.https), get('/time'))), { cloud: '/time' }, 'known cloud requests are forwarded');
+    const before = seen.length;
+    const time = json(await exchange(secure(ports.https), get('/time')));
+    assert.equal(time.responsetag, 'timestamp', '/time is answered locally');
+    assert.ok(Number.isFinite(time.time), 'with the current time');
     const unknown = await exchange(secure(ports.https), get('/aibi/never/seen?x=1'));
-    assert.deepEqual(json(unknown), { cloud: '/aibi/never/seen?x=1' });
+    assert.equal(unknown.startLine, 'HTTP/1.1 503 Service Unavailable', 'unknown requests are refused, not forwarded');
     const kinds = fixture.host.activity.recent(50).map((entry) => `${entry.kind}:${entry.title}`);
-    assert.ok(kinds.includes('unknown:New request: GET /aibi/never/seen'), 'never-before-seen requests are reported');
-    assert.ok(!kinds.some((kind) => kind.includes('/time')), 'known requests are not reported as new');
+    assert.ok(
+        kinds.some((kind) => kind.startsWith('unknown:Refused GET /aibi/never/seen')),
+        'refused requests are reported',
+    );
     const status = Buffer.from('{"battery":77,"charging":true}');
     const head = Buffer.from(
         `POST /aibi/report/status HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: ${status.length}\r\n\r\n`,
     );
     assert.equal(json(await exchange(secure(ports.https), [head, status])).responsetag, 'status');
-    assert.ok(seen.includes('GET /time HTTP/1.1'));
+    assert.equal(seen.length, before, 'the vendor cloud is contacted for nothing in local mode');
 }
 
 async function checkPassthrough(
@@ -148,9 +153,41 @@ async function checkCapture(capture: TrafficCapture): Promise<void> {
         'speech downloads are noted',
     );
     assert.ok(
-        records.some((record) => record.request.startLine === 'GET /time HTTP/1.1' && replyBody(record).includes('/time')),
-        'forwarded cloud replies are captured',
+        !records.some((record) => record.request.startLine === 'GET /time HTTP/1.1'),
+        'successful heartbeats do not evict voice evidence',
     );
+}
+
+async function checkTokens(ports: { https: number }, capture: TrafficCapture, seen: string[]): Promise<void> {
+    const before = seen.length;
+    assert.equal((await exchange(secure(ports.https), get('/token/fixture'))).startLine, 'HTTP/1.1 503 Service Unavailable');
+    await capture.flushed();
+    await mkdir(capture.directory, { recursive: true });
+    const body = JSON.stringify({ responsetag: 'token', access_token: 'offline-fixture-only', expire_in: 1, type: 'Bearer' });
+    await writeFile(
+        join(capture.directory, '2000-legacy.json'),
+        JSON.stringify({
+            request: { startLine: 'GET /token/fixture?version=1 HTTP/1.1' },
+            response: { startLine: 'HTTP/1.1 200 OK', body },
+        }),
+    );
+    assert.equal((await exchange(secure(ports.https), get('/token/fixture'))).body.toString(), body);
+    await capture.flushed();
+    await rm(capture.directory, { recursive: true });
+    assert.equal(
+        (await exchange(secure(ports.https), get('/token/fixture'))).body.toString(),
+        body,
+        'login survives loss of every traffic capture',
+    );
+    assert.equal(
+        (await exchange(secure(ports.https), get('/token/another-robot'))).startLine,
+        'HTTP/1.1 503 Service Unavailable',
+        'tokens stay bound to their device path',
+    );
+    const update = json(await exchange(secure(ports.https), get('/aibi/ota/version?version_num=8&current_name=1.5.0.p1')));
+    assert.equal(update['version-name'], '1.5.0.p1');
+    assert.equal(update.responsetag, 'latestversion');
+    assert.equal(seen.length, before, 'login replay and update check do not contact the vendor');
 }
 
 export async function checkAibiProxy(directory: string): Promise<void> {
@@ -184,6 +221,7 @@ export async function checkAibiProxy(directory: string): Promise<void> {
             httpsPort: ports.https,
             cloud: { address: () => Promise.resolve('127.0.0.1'), httpPort: cloudPorts.http, httpsPort: cloudPorts.https, ca: keys.cert },
         });
+        await checkTokens(ports, capture, seen);
         await checkLocal(ports, fixture);
         await checkForwarding(ports, fixture, seen);
         await checkCapture(capture);

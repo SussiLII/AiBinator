@@ -155,11 +155,15 @@ export class AibiService {
             this.dnsState = { state: 'failed', error: 'No network address was found for this computer' };
             return;
         }
+        const announced = new Set<string>();
         const dns = new DnsServer(
             { address: this.address, port: settings.dnsPort, upstream: settings.dnsUpstream },
             {
-                answered: (remote) =>
-                    this.activity.add('network', `Pointed ${remote} at this computer`, `api.aibipocket.com -> ${this.address}`),
+                answered: (remote) => {
+                    if (announced.has(remote)) return;
+                    announced.add(remote);
+                    this.activity.add('network', `Pointed ${remote} at this computer`, `api.aibipocket.com -> ${this.address}`);
+                },
                 warning: (title, detail) => this.activity.add('warning', title, detail),
             },
         );

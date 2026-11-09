@@ -1,0 +1,9 @@
+{
+  "fake_only": true,
+  "heartbeats": 1200,
+  "successful_heartbeat_files": 0,
+  "failed_heartbeat_records": 1,
+  "login_survives_process_restart": true,
+  "wrong_robot_refused": true,
+  "private_file_mode": "600"
+}

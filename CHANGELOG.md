@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-13 — Physical voice attempt failed before upload
+
+The owner reported two spoken questions with no audible reply. The restored DNS return route still works and real robot HTTPS heartbeats have resumed. Current counters reached27 requests, all /time, with no audio-upload headers or voice session. The streaming route records contact before consuming its body, so missing completed captures alone is not the basis of this finding. No fresh TLS error establishes the cause; small stalled sockets are a clue only. No runtime change was made. Wake/listening confirmation is pending because the test instruction omitted that step. If listening was entered, prepare a bounded connection trace before another trial. Physical phase0.5 acceptance has failed and remains open.
+
 ## 2026-11-13 — DNS return path restored; physical acceptance pending
 
 The owner restored the prior narrow host route. Route inspection, a fresh router DNS lookup and the API hostname after cache expiry now point to the local service. Ordinary Tailscale IPv6 ping10/10 and SSH3/3 passed; the service process remained unchanged. The real-browser portion of the network exit gate is blocked by remote desktop authentication, so full network qualification is incomplete. No VPN or bot restart was performed.

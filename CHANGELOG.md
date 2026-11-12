@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-13 — DNS return path restored; physical acceptance pending
+
+The owner restored the prior narrow host route. Route inspection, a fresh router DNS lookup and the API hostname after cache expiry now point to the local service. Ordinary Tailscale IPv6 ping10/10 and SSH3/3 passed; the service process remained unchanged. The real-browser portion of the network exit gate is blocked by remote desktop authentication, so full network qualification is incomplete. No VPN or bot restart was performed.
+
+The current service still had no robot HTTP contact when the DNS correction was verified. Requested a fresh robot startup and one short arithmetic question after that correction; acceptance is pending. The route is temporary and reboot durability remains an active recovery requirement. Do not equate successful DNS with successful voice or playback.
+
 ## 2026-11-13 — Host reboot lost the DNS return route
 
 Read-only follow-up found that the host rebooted on November11 and the recovery4fbe55d service restarted, but the machine-local DNS return route did not survive. The required destination now selects the VPN tunnel. A source-bound router query returns the vendor address and a fresh vendor-zone query times out, while the same query directly to the local DNS service returns its intended LAN address. Current service HTTP counters are empty. Restoring the prior narrow host route requires the owner's administrator authentication; no network change has been applied by this follow-up. The network exit gate remains required after restoration, and durable routing is an active blocker.

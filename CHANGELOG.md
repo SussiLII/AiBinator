@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-13 — Host reboot lost the DNS return route
+
+Read-only follow-up found that the host rebooted on November11 and the recovery4fbe55d service restarted, but the machine-local DNS return route did not survive. The required destination now selects the VPN tunnel. A source-bound router query returns the vendor address and a fresh vendor-zone query times out, while the same query directly to the local DNS service returns its intended LAN address. Current service HTTP counters are empty. Restoring the prior narrow host route requires the owner's administrator authentication; no network change has been applied by this follow-up. The network exit gate remains required after restoration, and durable routing is an active blocker.
+
+Retained evidence also establishes19 real robot audio uploads on November10–11 and55 matching durable-token replays. The expired saved token did not categorically prevent uploads in that interval. Local processing produced responses, but no local speech-download request or user-accepted speaker result is established. This updates the prior pending-audio conclusion without claiming end-to-end recovery. Codex remains disabled; reviewer-inheritance source is merged but not activated.
+
 ## 2026-11-10 — Prepare Codex reviewer inheritance
 
 The task adapter forced human review even when the account had automatic review configured. It now omits that override and inherits the configured reviewer while retaining on-request approvals. Updated the shared adapter fixture's old human-review expectation; the first adapter run exposed that stale assertion, and the corrected adapter checks, TypeScript build, changed-file lint and formatting now pass. An isolated local Codex0.167.0 ephemeral thread returned approvalsReviewer=auto_review and approvalPolicy=on-request with the reviewer omitted; no model turn or provider credentials were used. The installed protocol schema describes this field as an override. Actual production session settings still need verification on activation.

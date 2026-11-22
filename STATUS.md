@@ -1,9 +1,10 @@
-# AiBinator — inactive
+# AiBinator — retired and stopped
 
-- (2026-11-22, Codex) The owner ended this project. Phase 0.5 was never accepted; recovery, Codex activation and further physical tests are cancelled. Local scratch artifacts are archived. Router cleanup was explicitly skipped, so decommissioning is partial and the existing DNS-serving installation remains running. See CHANGELOG “Project retired”.
+- (2026-11-22, Codex) A safeguarded pause established router DNS works without Aibinator. Service/autostart removed and installation/private state archived. Final14/14 DNS queries and IPv6/SSH passed. The earlier retained-service requirement is superseded. See CHANGELOG “Safe shutdown established”.
 
-## Retained exception
+## Final boundaries
 
-- Owner declined router login; DNS independence is unverified. Existing service and automatic startup remain to avoid breaking network DNS. Runtime4fbe55d and private state have not been rolled back. This is not a completed shutdown.
-- Eventual shutdown would require independent router DNS first; no further work or reminder is scheduled. The Codex responder remains disabled.
-- Source history and private evidence are retained. Reviewer-inheritance source was merged but never activated. No audible-answer or requested-song acceptance passed.
+- No Aibinator service, process, listener, old installation path or test watchdog remains active. Source and private history retained.
+- Router settings were not changed; an obsolete primary may still cause delays. This does not require the bot to run.
+- Google/actual YouTube playback passed and internal Git reached sign-in. Two other internal browser failures also occurred with the original service temporarily restored. The full network gate is not all-green; no general network repair claimed.
+- Phase0.5 never passed physical acceptance. Voice recovery, Codex activation and further tests are dropped. No follow-up or reminder scheduled.

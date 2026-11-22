@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-22 — Safe shutdown established
+
+The owner's follow-up challenged the assumed DNS dependency. A bounded30-second pause with an independent automatic-resume safeguard showed all16 router queries from two clients succeeded while direct queries to the paused service failed. This disproved the earlier categorical requirement to restore router settings before stopping this process.
+
+Service stopped and automatic startup plist removed. Entire installation/private state and rollback moved intact to a private archive; source history remains. Final verification found no Aibinator service, process, listener or test watchdog;14/14 router queries and ordinary IPv6/SSH passed. Google and actual YouTube playback worked; an internal repository sign-in rendered. Two other internal browser checks failed identically with the service stopped and temporarily restored as a control; wider network qualification is not all-green. No router, VPN or shared provider configuration changed.
+
+Router settings remain unverified and may contain an obsolete primary causing lookup delays, already observed before shutdown. This remaining configuration cleanup does not require Aibinator to run. Process/autostart retirement is complete; voice recovery and task activation remain dropped.
+
 ## 2026-11-22 — Project retired
 
 The owner ended this project and requested cleanup, then explicitly declined router login and asked to skip that step. Phase 0.5 never passed physical acceptance; all recovery, Codex activation and further physical-test asks are cancelled. Local build/probe artifacts were privately archived and a clean redundant audit worktree removed, with source history retained.

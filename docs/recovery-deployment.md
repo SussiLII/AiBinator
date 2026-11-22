@@ -1,5 +1,7 @@
 # Recovery deployment
 
+> Superseded on 2026-11-22: this project is inactive. This guide is historical, not an active deployment or testing plan. See STATUS.md and the retirement changelog entry.
+
 Build and qualify on the development host. Deploy only a verified commit on the owner's fork main; do not rebuild from an older production source checkout. Preserve `.env`, `policy.json`, all `.data`, TLS identity and unrelated services.
 
 1. Record the production source HEAD, tracked/untracked status, service PID/label and SHA256 of all runtime files. Confirm no competing service operation.

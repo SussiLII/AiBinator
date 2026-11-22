@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-22 — Project retired
+
+The owner ended this project and requested cleanup, then explicitly declined router login and asked to skip that step. Phase 0.5 never passed physical acceptance; all recovery, Codex activation and further physical-test asks are cancelled. Local build/probe artifacts were privately archived and a clean redundant audit worktree removed, with source history retained.
+
+Decommissioning is partial: router DNS independence is unverified, so the existing DNS-serving Aibinator installation and automatic startup are intentionally retained. Its recovery4fbe55d runtime and private state remain active; no shutdown, runtime rollback or completed network qualification is claimed. The operator remains disabled. No router/VPN/shared Codex setting or other service was changed or restarted. The owner declined the prerequisite for shutdown; no further action or recurring follow-up is scheduled. Historical source fixes and private rollback evidence are retained. The old activation guide is marked superseded.
+
 ## 2026-11-13 — Physical voice attempt failed before upload
 
 The owner reported two spoken questions with no audible reply. The restored DNS return route still works and real robot HTTPS heartbeats have resumed. Current counters reached27 requests, all /time, with no audio-upload headers or voice session. The streaming route records contact before consuming its body, so missing completed captures alone is not the basis of this finding. No fresh TLS error establishes the cause; small stalled sockets are a clue only. No runtime change was made. Wake/listening confirmation is pending because the test instruction omitted that step. If listening was entered, prepare a bounded connection trace before another trial. Physical phase0.5 acceptance has failed and remains open.
